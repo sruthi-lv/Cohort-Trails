@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated Scatter Plot with Trails and CSV Data</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px;
+        }
+        svg {
+            background-color: #f9f9f9;
+        }
+        .bubble {
+            stroke: #333;
+            stroke-width: 2px;
+        }
+        .trail {
+            fill: none;
+            stroke-width: 2px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <h2>Animated Scatter Plot with Trails</h2>
+    <svg id="chart" width="900" height="600"></svg>
+
+    <script>
+        // Dimensions and margins
+        const margin = {top: 20, right: 20, bottom: 50, left: 70};
+        const width = 900 - margin.left - margin.right;
+        const height = 600 - margin.top - margin.bottom;
+
+        // Create SVG canvas
+        const svg = d3.select("#chart")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Load CSV data
+        d3.csv("data.csv").then(function(data) {
+            // Parse the data
+            data.forEach(function(d) {
+                d.inc_trial_conversion = +d.inc_trial_conversion.replace('%', '');  // Convert to numeric value
+            });
+
+            // Scales
+            const xScale = d3.scaleBand()
+                .domain(data.map(d => d.Month))
+                .range([0, width])
+                .padding(0.1);
+
+            const yScale = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.inc_trial_conversion)])
+                .nice()
+                .range([height, 0]);
+
+            const sizeScale = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.inc_trial_conversion)])
+                .range([5, 30]);  // Bubble size range
+
+            // Colors for different categories
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+            // Add X axis
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(xScale));
+
+            // Add Y axis
+            svg.append("g")
+                .call(d3.axisLeft(yScale).ticks(10).tickFormat(d => d + "%"));
+
+            // Create a group for trails
+            const trails = svg.append("g");
+
+            // Add the bubbles
+            const bubbles = svg.selectAll(".bubble")
+                .data(data)
+                .enter()
+                .append("circle")
+                .attr("class", "bubble")
+                .attr("cx", d => xScale(d.Month) + xScale.bandwidth() / 2)
+                .attr("cy", d => yScale(d.inc_trial_conversion))
+                .attr("r", 0)  // Start with size 0
+                .attr("fill", d => color(d.region));
+
+            // Add trails (lines following the bubbles)
+            const trailLines = trails.selectAll(".trail")
+                .data(data)
+                .enter()
+                .append("path")
+                .attr("class", "trail")
+                .attr("stroke", d => color(d.region))
+                .attr("d", function(d, i) {
+                    return `M${xScale(d.Month) + xScale.bandwidth() / 2},${yScale(d.inc_trial_conversion)}`;
+                });
+
+            // Animate the bubbles and trails
+            function animateBubbles() {
+                bubbles
+                    .transition()
+                    .duration(2000)
+                    .attr("r", d => sizeScale(d.inc_trial_conversion));
+
+                trailLines
+                    .transition()
+                    .duration(2000)
+                    .attr("d", function(d, i) {
+                        const xEnd = xScale(d.Month) + xScale.bandwidth() / 2;
+                        const yEnd = yScale(d.inc_trial_conversion);
+                        return `M${xEnd},${yEnd} L${xEnd},${yEnd}`;  // Adjust the trail to follow the bubbles
+                    })
+                    .on("end", function() {
+                        setTimeout(animateBubbles, 1000);  // Small delay before looping
+                    });
+            }
+
+            // Start the animation
+            animateBubbles();
+        }).catch(function(error) {
+            console.log("Error loading CSV file:", error);
+        });
+    </script>
+</body>
+</html>
